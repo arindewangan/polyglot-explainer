@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polyglot Explainer — Simulated Showcase</title>
+<style>
+  :root { --bg:#0b1020; --card:#141b33; --accent:#e2001a; --text:#eef1ff; --muted:#9aa3c7; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
+  .banner { background:#3a2b00; color:#ffd75e; text-align:center; padding:10px 16px; font-weight:600; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 2.2rem; margin-bottom: 4px; }
+  h1 .flag { color: var(--accent); }
+  p.sub { color: var(--muted); margin-top: 0; }
+  .card { background: var(--card); border-radius: 14px; padding: 22px; margin-top: 20px; }
+  label { display:block; font-weight:600; margin: 14px 0 6px; }
+  input[type=text] { width:100%; padding:12px; border-radius:10px; border:1px solid #2a3358; background:#0b1020; color:var(--text); font-size:1rem; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { padding:8px 14px; border-radius:999px; border:1px solid #2a3358; background:#0b1020; color:var(--text); cursor:pointer; font-size:.9rem; }
+  .chip.active { background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .depths { display:flex; gap:8px; }
+  button.explain { margin-top:18px; width:100%; padding:14px; font-size:1.05rem; font-weight:700; border:none; border-radius:10px; background:var(--accent); color:#fff; cursor:pointer; }
+  button.explain:hover { filter:brightness(1.1); }
+  #output { white-space: pre-wrap; line-height:1.6; }
+  .meta { color:var(--muted); font-size:.85rem; margin-bottom:10px; }
+  .demo-tag { display:inline-block; background:#3a2b00; color:#ffd75e; font-size:.75rem; font-weight:700; padding:3px 10px; border-radius:999px; margin-bottom:10px; }
+  footer { margin-top:40px; color:var(--muted); font-size:.85rem; text-align:center; }
+  .topics { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="banner">SIMULATED SHOWCASE — no live model. All responses below are canned demo content.</div>
+<div class="wrap">
+  <h1><span class="flag">🇨🇭</span> Polyglot Explainer</h1>
+  <p class="sub">Any complex topic, explained clearly — <em>in your language</em>. Concept showcase for Switzerland's open multilingual LLM, Apertus (1,811 languages).</p>
+
+  <div class="card">
+    <label for="topic">Topic</label>
+    <input id="topic" type="text" placeholder="e.g. photosynthesis" value="photosynthesis">
+    <div class="topics">
+      <button class="chip topic-chip" data-topic="photosynthesis">photosynthesis</button>
+      <button class="chip topic-chip" data-topic="black holes">black holes</button>
+      <button class="chip topic-chip" data-topic="neural networks">neural networks</button>
+    </div>
+
+    <label>Language</label>
+    <div class="chips" id="langs"></div>
+
+    <label>Depth</label>
+    <div class="depths" id="depths">
+      <button class="chip depth-chip active" data-depth="eli5">ELI5</button>
+      <button class="chip depth-chip" data-depth="standard">Standard</button>
+      <button class="chip depth-chip" data-depth="deep">Deep dive</button>
+    </div>
+
+    <button class="explain" id="go">Explain it</button>
+  </div>
+
+  <div class="card" id="result" hidden>
+    <span class="demo-tag">SIMULATED DEMO OUTPUT</span>
+    <div class="meta" id="meta"></div>
+    <div id="output"></div>
+  </div>
+
+  <footer>
+    Polyglot Explainer · Hack Apertus concept showcase · Live version calls Apertus via an OpenAI-compatible API (key required).
+  </footer>
+</div>
+
+<script>
+const LANGS = [
+  ["en","English"],["hi","Hindi"],["ta","Tamil"],["bn","Bengali"],["kn","Kannada"],
+  ["te","Telugu"],["ml","Malayalam"],["mr","Marathi"],["gu","Gujarati"],
+  ["fr","French"],["de","German"],["ja","Japanese"],["sw","Swahili"]
+];
+
+// Canned simulated responses for the 3 demo topics (mirrors app.py demo mode).
+const CANNED = {
+  "photosynthesis|hi|eli5": "प्रकाश संश्लेषण (Photosynthesis) पेड़ों का खाना बनाने का तरीका है। पत्तियाँ सूरज की रोशनी को पकड़ती हैं, हवा से कार्बन डाइऑक्साइड लेती हैं, और जड़ों से पानी उठाती हैं। फिर यह तीनों चीज़ों से चीनी बनाती हैं — जैसे रसोई में आटा, पानी और धूप से रोटी बनना!",
+  "photosynthesis|ta|eli5": "ஒளிச்சேர்க்கை (Photosynthesis) என்பது செடிகள் தங்கள் உணவைத் தயாரிக்கும் முறை. இலைகள் சூரிய ஒளியைப் பிடிக்கின்றன, காற்றிலிருந்து கார்பன் டை ஆக்சைடை எடுத்து, வேர்கள் வழியாக நீரை உறிஞ்சுகின்றன. பிறகு இவற்றிலிருந்து சர்க்கரையை உருவாக்குகின்றன!",
+  "photosynthesis|en|standard": "Photosynthesis is the process by which plants convert light energy into chemical energy. Chlorophyll in the leaves captures photons, water absorbed by the roots is split, and carbon dioxide from the air is fixed into glucose (C6H12O6), releasing oxygen as a byproduct. It underpins nearly every food chain on Earth.",
+  "black holes|ja|standard": "ブラックホールは、重力が非常に強いため光さえも逃げられない天体です。巨大な星が燃料を使い果たして崩壊すると形成され、中心には特異点があり、周囲には事象の地平線と呼ばれる境界があります。この境界を越えたものは二度と戻れません。",
+  "black holes|fr|eli5": "Un trou noir, c'est comme un aspirateur géant dans l'espace ! Il est tellement lourd et fort qu'il aspire tout, même la lumière. Une fois que quelque chose tombe dedans, ça ne peut plus ressortir. C'est comme tomber dans un puits sans fond.",
+  "neural networks|de|deep": "Neuronale Netze sind parametrisierte Funktionsapproximatoren, die aus Schichten miteinander verbundener Einheiten (Neuronen) bestehen. Jedes Neuron berechnet eine gewichtete Summe seiner Eingaben plus Bias, gefolgt von einer nichtlinearen Aktivierungsfunktion. Das Training erfolgt via Backpropagation: Gradienten der Verlustfunktion werden per Kettenregel rückwärts propagiert, und Gewichte werden mit Verfahren wie Adam aktualisiert.",
+  "neural networks|sw|eli5": "Mtandao wa neva (neural network) ni kama ubongo mdogo wa kompyuta! Una sehemu ndogo ndogo zinazoitwa 'neva' zinazojifunza kwa kuona mifano mingi. Kama mtoto anayejifunza kutambua paka kwa kuona picha nyingi za paka — ndivyo kompyuta inavyojifunza!"
+};
+
+const FALLBACK = (t, l, d) =>
+  `This is a simulated demo explanation of '${t}' in ${l} at '${d}' depth. ` +
+  `The live Polyglot Explainer calls the Apertus model for any topic × language × depth.`;
+
+let lang = "en", depth = "eli5";
+
+const langBox = document.getElementById("langs");
+LANGS.forEach(([code, name], i) => {
+  const b = document.createElement("button");
+  b.className = "chip lang-chip" + (i === 0 ? " active" : "");
+  b.textContent = name;
+  b.dataset.code = code;
+  b.onclick = () => {
+    document.querySelectorAll(".lang-chip").forEach(c => c.classList.remove("active"));
+    b.classList.add("active");
+    lang = code;
+  };
+  langBox.appendChild(b);
+});
+
+document.querySelectorAll(".depth-chip").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll(".depth-chip").forEach(c => c.classList.remove("active"));
+    b.classList.add("active");
+    depth = b.dataset.depth;
+  };
+});
+
+document.querySelectorAll(".topic-chip").forEach(b => {
+  b.onclick = () => { document.getElementById("topic").value = b.dataset.topic; };
+});
+
+document.getElementById("go").onclick = () => {
+  const topic = document.getElementById("topic").value.trim() || "(no topic)";
+  const key = `${topic.toLowerCase()}|${lang}|${depth}`;
+  const text = CANNED[key] || FALLBACK(topic, lang, depth);
+  const langName = (LANGS.find(([c]) => c === lang) || [lang, lang])[1];
+  document.getElementById("meta").textContent =
+    `Topic: ${topic} · Language: ${langName} · Depth: ${depth} · Model: simulated (no live call)`;
+  document.getElementById("output").textContent = text;
+  document.getElementById("result").hidden = false;
+  document.getElementById("result").scrollIntoView({ behavior: "smooth" });
+};
+</script>
+</body>
+</html>
