@@ -1,0 +1,71 @@
+# Draft — GitHub Actions smoke test for the Track 2B `make run` Docker path.
+#
+# Purpose: this VM cannot run Docker containers (runc setns restriction), so
+# container boot is verified on GitHub's ubuntu-latest runners (Docker +
+# compose plugin preinstalled) instead.
+#
+# Install: copy to .github/workflows/ci-docker-smoke.yml in the template-derived
+# public repo (see GITHUB_PUSH_CHECKLIST.md — do NOT push drafts/ itself).
+#
+# What it proves: `docker compose up --build` boots, gunicorn serves on
+# 0.0.0.0:5000, and the full no-key judges' path works (demo mode is the
+# expected state — no secrets are used or required).
+
+name: docker-smoke
+
+on:
+  push:
+    branches: [main, master]
+    paths: ['track_2b/**']
+  pull_request:
+    paths: ['track_2b/**']
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: track_2b
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Docker versions
+        run: docker version && docker compose version
+
+      - name: Build and start (make run path)
+        run: docker compose up --build -d
+
+      - name: Wait for /healthz (max 90 s)
+        run: |
+          for i in $(seq 1 45); do
+            if curl -fsS http://localhost:5000/healthz >/dev/null 2>&1; then
+              echo "healthy after ${i}x2s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "app never became healthy"; docker compose logs app; exit 1
+
+      - name: Smoke the judges' path (no API key = labeled demo mode)
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:5000/ | grep -q SIMULATED
+          curl -fsS http://localhost:5000/api/languages | grep -q '"count":13'
+          # valid request -> 200, demo:true, cached:false
+          curl -fsS -X POST http://localhost:5000/api/explain \
+            -H 'Content-Type: application/json' \
+            -d '{"topic":"photosynthesis","language":"hi","depth":"eli5"}' \
+            | grep -q '"demo":true'
+          # repeat -> cached:true
+          curl -fsS -X POST http://localhost:5000/api/explain \
+            -H 'Content-Type: application/json' \
+            -d '{"topic":"photosynthesis","language":"hi","depth":"eli5"}' \
+            | grep -q '"cached":true'
+          # bad input -> 400
+          [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:5000/api/explain \
+            -H 'Content-Type: application/json' -d '{"topic":"","language":"xx","depth":"nope"}')" = "400" ]
+          echo "all smoke checks green"
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
